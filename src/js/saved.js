@@ -65,4 +65,4 @@ function homeSubmit(e) {
   else { SAVED.spots.push({ name, lon: +c.lng.toFixed(5), lat: +c.lat.toFixed(5) }); drawSpots(); }
   homeEditing = null; saveSaved(); renderHome(); toast(`Saved "${name}".`, 2000);
 }
-function closeSearch() { $("results").hidden = true; homeEditing = null; $("q").blur(); }
+function closeSearch() { $("results").hidden = true; homeEditing = null; $("q").blur(); document.body.classList.remove("search-open"); }

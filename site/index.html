@@ -150,13 +150,30 @@ body.zone.zone-nocard #card{ display:none!important }
 body:not(.zone) #zoneBar{ display:none }
 @media (max-width:1180px) and (min-width:1031px){ #systems{ left:auto; right:322px; transform:none } }       /* keep clear of the clock and search */
 @media (max-width:1030px) and (min-width:761px){ #systems{ top:auto; bottom:96px } }
-@media (max-width:760px){
-  #systems{ top:auto; bottom:76px } #search{ width:calc(100vw - 28px); top:66px } #brand{ top:10px; left:10px } .wordmark span{ display:none }
-  #rail{ top:122px; right:10px } #settings{ right:10px; left:10px; width:auto; top:122px; max-height:60vh }
-  #card{ left:0; right:0; top:auto; bottom:0; width:auto; border-radius:16px 16px 0 0; max-height:48vh }
-  #timebar{ bottom:10px; gap:6px } #day,#speed .ticks,.tool span{ display:none } #speed{ width:90px }
+@media (max-width:760px){                       /* phones: slim top bar, sheets from the bottom, one settings button */
+  .ui{ --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px) }
+  #brand{ top:calc(var(--st) + 8px); left:8px; gap:6px } .wordmark{ padding:7px 11px } .wordmark span{ display:none } .wordmark b{ font-size:15px }
+  #clock{ min-width:0; padding:5px 10px } #clock .t{ font-size:15px } #clockS{ max-width:118px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  #search{ top:calc(var(--st) + 8px); right:8px; width:40px; height:40px; overflow:hidden; border-radius:12px; transition:width .2s ease }
+  #search #q{ opacity:0; pointer-events:none; width:0; padding:0 } #search #nearBtn{ display:none }
+  #search::after{ content:""; position:absolute; inset:0; background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%238b9099' stroke-width='2.2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-4-4'/%3E%3C/svg%3E") center no-repeat; pointer-events:none }
+  body.search-open #search{ width:auto; left:8px; height:auto; overflow:visible } body.search-open #search::after{ display:none }
+  body.search-open #search #q{ opacity:1; pointer-events:auto; width:auto; flex:1; padding:10px 12px } body.search-open #search #nearBtn{ display:grid }
+  body.search-open #brand{ visibility:hidden } #results{ max-height:60vh }
+  #systems{ top:calc(var(--st) + 56px); bottom:auto; left:50%; transform:translateX(-50%); padding:3px } #systems .seg button{ padding:5px 10px; font-size:12.5px }
+  #rail{ top:calc(var(--st) + 104px); right:8px } #rail #tabs{ display:none } #nav{ width:40px } #zin,#zout{ display:none!important }
+  #settings{ left:0; right:0; top:auto; bottom:0; width:auto; max-height:72vh; z-index:7; border-radius:18px 18px 0 0; padding-bottom:var(--sb) }
+  #setTitle{ visibility:hidden } .ptabs{ display:flex; gap:4px; overflow-x:auto; margin:0 0 6px; padding-bottom:2px } .ptabs button{ flex:none; padding:7px 12px; border-radius:9px; font-weight:600; font-size:13px; color:var(--ink2) } .ptabs button[aria-pressed=true]{ background:var(--chip); color:var(--ink) }
+  #card{ left:0; right:0; top:auto; bottom:0; width:auto; border-radius:18px 18px 0 0; max-height:52vh; padding-bottom:var(--sb); z-index:6 }
+  #card::before{ content:""; display:block; flex:none; width:38px; height:4px; border-radius:2px; background:var(--ink3); opacity:.45; margin:8px auto 2px }
+  #card.min{ max-height:calc(76px + var(--sb)) } #card.min .cb{ display:none }
+  body.card-open #timebar{ display:none } body.card-open #lockBtn{ position:fixed; right:8px; bottom:calc(52vh + 10px) }
+  #timebar{ left:8px; right:8px; transform:none; bottom:calc(var(--sb) + 8px); max-width:none; justify-content:space-between; gap:4px; padding:6px 8px }
+  #timebar #day, #timebar #speed, #timebar #speedVal, #shareBtn, #aboutBtn, #timebar .sep, .tool span{ display:none } #timebar #setBtn{ display:grid }
+  #toast{ bottom:calc(var(--sb) + 70px) } body.card-open #toast{ bottom:calc(52vh + 12px) }
+  #zoneBar{ top:calc(var(--st) + 8px); left:8px; right:8px; overflow-x:auto } body.zone #card{ width:auto }
 }
-</style>
+#setBtn{ display:none }</style>
 </head>
 <body>
 <canvas id="sky"></canvas><div id="map"></div><canvas id="overlay"></canvas>
@@ -202,6 +219,7 @@ body:not(.zone) #zoneBar{ display:none }
   <span class="sep tools-n"></span>
   <button type="button" class="tool tools-n" id="randBtn" title="Follow a random train"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg><span>Random</span></button>
   <button type="button" class="tool tools-n" id="shareBtn" title="Copy a link to this view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v13"/></svg><span>Share</span></button>
+  <button type="button" class="tool tools-n" id="setBtn" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
   <button type="button" class="tool tools-n" id="aboutBtn" title="About Elevated"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>About</span></button>
   <span class="sep"></span>
   <button type="button" class="pill zone-keep" id="zoneBtn">Zone out</button>
@@ -2538,7 +2556,7 @@ function homeSubmit(e) {
   else { SAVED.spots.push({ name, lon: +c.lng.toFixed(5), lat: +c.lat.toFixed(5) }); drawSpots(); }
   homeEditing = null; saveSaved(); renderHome(); toast(`Saved "${name}".`, 2000);
 }
-function closeSearch() { $("results").hidden = true; homeEditing = null; $("q").blur(); }
+function closeSearch() { $("results").hidden = true; homeEditing = null; $("q").blur(); document.body.classList.remove("search-open"); }
 
 /* ===== Elevated v2 — film locations (Map → Film locations, off by default)
    Famous scenes shot in Chicago. Each place was checked in at least two independent sources;
@@ -3249,11 +3267,12 @@ function renderSettings() {
   const B = $("setBody"); $("setTitle").textContent = TITLES[tab];
   let h = "";
   const note = t => `<div class="note">${t}</div>`;
+  if (innerWidth <= 760) h += `<div class="ptabs">${Object.entries(TITLES).map(([k, t]) => `<button type="button" data-ptab="${k}" aria-pressed="${k === tab}">${t}</button>`).join("")}</div>`;   // phones: tabs inside the sheet
   if (tab === "view") {
     h += row("Map angle", seg("mapAngle", [["top", "Top-down"], ["tilt", "Tilted"]]));
     h += row("Follow camera", seg("follow", [["north", "North"], ["behind", "Behind"], ["side", "Side"], ["orbit", "Orbit"]]));
     h += `<button type="button" class="view" id="zoneFromSet"><div><b>Zone out</b><small>Full screen without controls: Follow, Group or Free camera</small></div><span>›</span></button>`;
-    h += note("Viewpoints like the Loop or Tower 18 are in search.");
+    h += `<div class="sub">Viewpoints</div>` + VIEWS.map((v, i) => `<button type="button" class="view" data-vp="${i}"><div><b>${esc(v.n)}</b><small>${esc(v.s)}</small></div><span>›</span></button>`).join("");
   } else if (tab === "map") {
     h += row("Map style", seg("mapStyle", [["light", "Light"], ["dark", "Dark"], ["auto", "Auto"]]));
     h += row("Buildings", seg("bldgMode", [["see", "See-through"], ["solid", "Solid"], ["flat", "Flat"]]));
@@ -3297,6 +3316,11 @@ function openSettings(t) {
 }
 function closeSettings() { $("settings").hidden = true; tab = null; for (const b of $("tabs").children) b.setAttribute("aria-pressed", "false"); }
 function syncSettingsUI() { if (tab) renderSettings(); }
+$("setBtn").onclick = () => $("settings").hidden ? openSettings(tab || "view") : closeSettings();
+/* phones: the search box opens from its icon; the card is a bottom sheet whose handle folds it down to its header */
+$("search").addEventListener("click", () => { if (innerWidth <= 760 && !document.body.classList.contains("search-open")) { document.body.classList.add("search-open"); closeSettings(); $("q").focus(); } });
+new MutationObserver(() => { document.body.classList.toggle("card-open", !$("card").hidden); if ($("card").hidden) $("card").classList.remove("min"); }).observe($("card"), { attributes: true, attributeFilter: ["hidden"] });
+$("card").addEventListener("click", e => { if (innerWidth > 760) return; const r = $("card").getBoundingClientRect(); if (e.clientY - r.top < 18) $("card").classList.toggle("min"); }, true);
 $("tabs").onclick = e => { const b = e.target.closest("button"); if (b) openSettings(b.dataset.tab); };
 $("setClose").onclick = closeSettings;
 $("setBody").onclick = e => {
@@ -3305,7 +3329,10 @@ $("setBody").onclick = e => {
   else if (t) changeSetting(t.dataset.tog, !SET[t.dataset.tog]);
   else if (c) { const id = c.dataset.line; SET.hidden = lineOn(id) ? [...SET.hidden, id] : SET.hidden.filter(x => x !== id); saveSet(); refreshTransitPaint(); syncSystemsUI(); renderSettings(); }
   else if (v) { const p = VIEWS[+v.dataset.vp]; stopFollow(); closePanel(); map.flyTo({ center: p.c, zoom: p.z, pitch: p.p, bearing: p.b, duration: 2600 }); }
+  else if (e.target.closest("[data-ptab]")) openSettings(e.target.closest("[data-ptab]").dataset.ptab);
   else if (e.target.closest("#zoneFromSet")) enterZone();
+  else if (e.target.closest("[data-vp]")) { const p = VIEWS[+e.target.closest("[data-vp]").dataset.vp]; stopFollow(); closePanel(); if (innerWidth <= 760) closeSettings();
+    map.flyTo({ center: p.c, zoom: p.z, pitch: SET.mapAngle === "top" ? 0 : p.p, bearing: p.b, duration: 2600 }); }
   else if (e.target.closest("#metraMore")) { metraOpen = !metraOpen; renderSettings(); }
 };
 let metraOpen = false;

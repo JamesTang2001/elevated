@@ -61,11 +61,12 @@ function renderSettings() {
   const B = $("setBody"); $("setTitle").textContent = TITLES[tab];
   let h = "";
   const note = t => `<div class="note">${t}</div>`;
+  if (innerWidth <= 760) h += `<div class="ptabs">${Object.entries(TITLES).map(([k, t]) => `<button type="button" data-ptab="${k}" aria-pressed="${k === tab}">${t}</button>`).join("")}</div>`;   // phones: tabs inside the sheet
   if (tab === "view") {
     h += row("Map angle", seg("mapAngle", [["top", "Top-down"], ["tilt", "Tilted"]]));
     h += row("Follow camera", seg("follow", [["north", "North"], ["behind", "Behind"], ["side", "Side"], ["orbit", "Orbit"]]));
     h += `<button type="button" class="view" id="zoneFromSet"><div><b>Zone out</b><small>Full screen without controls: Follow, Group or Free camera</small></div><span>›</span></button>`;
-    h += note("Viewpoints like the Loop or Tower 18 are in search.");
+    h += `<div class="sub">Viewpoints</div>` + VIEWS.map((v, i) => `<button type="button" class="view" data-vp="${i}"><div><b>${esc(v.n)}</b><small>${esc(v.s)}</small></div><span>›</span></button>`).join("");
   } else if (tab === "map") {
     h += row("Map style", seg("mapStyle", [["light", "Light"], ["dark", "Dark"], ["auto", "Auto"]]));
     h += row("Buildings", seg("bldgMode", [["see", "See-through"], ["solid", "Solid"], ["flat", "Flat"]]));
@@ -109,6 +110,11 @@ function openSettings(t) {
 }
 function closeSettings() { $("settings").hidden = true; tab = null; for (const b of $("tabs").children) b.setAttribute("aria-pressed", "false"); }
 function syncSettingsUI() { if (tab) renderSettings(); }
+$("setBtn").onclick = () => $("settings").hidden ? openSettings(tab || "view") : closeSettings();
+/* phones: the search box opens from its icon; the card is a bottom sheet whose handle folds it down to its header */
+$("search").addEventListener("click", () => { if (innerWidth <= 760 && !document.body.classList.contains("search-open")) { document.body.classList.add("search-open"); closeSettings(); $("q").focus(); } });
+new MutationObserver(() => { document.body.classList.toggle("card-open", !$("card").hidden); if ($("card").hidden) $("card").classList.remove("min"); }).observe($("card"), { attributes: true, attributeFilter: ["hidden"] });
+$("card").addEventListener("click", e => { if (innerWidth > 760) return; const r = $("card").getBoundingClientRect(); if (e.clientY - r.top < 18) $("card").classList.toggle("min"); }, true);
 $("tabs").onclick = e => { const b = e.target.closest("button"); if (b) openSettings(b.dataset.tab); };
 $("setClose").onclick = closeSettings;
 $("setBody").onclick = e => {
@@ -117,7 +123,10 @@ $("setBody").onclick = e => {
   else if (t) changeSetting(t.dataset.tog, !SET[t.dataset.tog]);
   else if (c) { const id = c.dataset.line; SET.hidden = lineOn(id) ? [...SET.hidden, id] : SET.hidden.filter(x => x !== id); saveSet(); refreshTransitPaint(); syncSystemsUI(); renderSettings(); }
   else if (v) { const p = VIEWS[+v.dataset.vp]; stopFollow(); closePanel(); map.flyTo({ center: p.c, zoom: p.z, pitch: p.p, bearing: p.b, duration: 2600 }); }
+  else if (e.target.closest("[data-ptab]")) openSettings(e.target.closest("[data-ptab]").dataset.ptab);
   else if (e.target.closest("#zoneFromSet")) enterZone();
+  else if (e.target.closest("[data-vp]")) { const p = VIEWS[+e.target.closest("[data-vp]").dataset.vp]; stopFollow(); closePanel(); if (innerWidth <= 760) closeSettings();
+    map.flyTo({ center: p.c, zoom: p.z, pitch: SET.mapAngle === "top" ? 0 : p.p, bearing: p.b, duration: 2600 }); }
   else if (e.target.closest("#metraMore")) { metraOpen = !metraOpen; renderSettings(); }
 };
 let metraOpen = false;
