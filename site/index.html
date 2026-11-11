@@ -639,21 +639,33 @@ const railOn = () => railAgs().length > 0;
 const agFilter = () => ["in", ["get", "ag"], ["literal", railAgs()]];
 
 /* ---------- transit GeoJSON ---------- */
+/* Lines that share track are drawn side by side, centred on the real track; a line on its own is drawn exactly on it
+   (so station dots sit on the line). Sharing is found by looking for other lines' track within about 25 m. */
 function routeSegments() {
+  const CELL = .00028, grid = new Map(), cell = (x, y) => Math.round(x / CELL) + ":" + Math.round(y / CELL);
+  for (const r of ROUTES) for (let i = 0; i < r.coords.length; i++) {                   // index every line's track (densified)
+    const a = r.coords[i], b = r.coords[i + 1] || a, n = Math.max(1, Math.ceil(Math.hypot((b[0] - a[0]) * KX, b[1] - a[1]) / (CELL * .7)));
+    for (let k = 0; k < n; k++) { const x = a[0] + (b[0] - a[0]) * k / n, y = a[1] + (b[1] - a[1]) * k / n, c = cell(x, y); if (!grid.has(c)) grid.set(c, new Set()); grid.get(c).add(r.line); }
+  }
+  const linesAt = (x, y) => { const out = new Set(), cx = Math.round(x / CELL), cy = Math.round(y / CELL);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const g = grid.get((cx + dx) + ":" + (cy + dy)); if (g) for (const l of g) out.add(l); } return out; };
   const feats = [];
   for (const r of ROUTES) {
     let cur = null, cut = Infinity;
     if (r.loop) { const ex = LOOP_EXIT[r.id] || LOOP_EXIT[r.line], hits = r.stops.filter(s => s.id === ex); if (hits.length) cut = hits[hits.length - 1].d + 30; }   // out-and-back routes: draw the return leg once
     r.coords.forEach((c, i) => {
       if (r.cum[i] > cut) return;
-      const k = kindAt(r, r.cum[i]);
-      if (!cur || cur.k !== k) { const prev = cur; if (prev) { prev.pts.push(c); feats.push(prev); } cur = { k, line: r.line, pts: [] }; }
+      const k = kindAt(r, r.cum[i]), nx = r.coords[Math.min(i + 1, r.coords.length - 1)], pv = r.coords[Math.max(i - 1, 0)];
+      const here = [...linesAt(c[0], c[1])].sort((a, b) => LINES.indexOf(a) - LINES.indexOf(b));
+      const ang = Math.atan2(nx[1] - pv[1], (nx[0] - pv[0]) * KX), canon = ang > -Math.PI / 2 && ang <= Math.PI / 2 ? 1 : -1;   // offsets measured from a fixed side, whichever way the route runs
+      const off = here.length > 1 ? (here.indexOf(r.line) - (here.length - 1) / 2) * canon : 0, key = k + "|" + off;
+      if (!cur || cur.key !== key) { const prev = cur; if (prev) { prev.pts.push(c); feats.push(prev); } cur = { key, k, off, line: r.line, pts: [] }; }
       cur.pts.push(c);
     });
     if (cur) feats.push(cur);
   }
   return { type: "FeatureCollection", features: feats.filter(f => f.pts.length > 1).map(f => ({ type: "Feature",
-    properties: { line: f.line, color: LCOL[f.line], tcolor: muted(LCOL[f.line]), kind: f.k, off: OFFSET[f.line] || 0, z: LINES.indexOf(f.line) },
+    properties: { line: f.line, color: LCOL[f.line], tcolor: muted(LCOL[f.line]), kind: f.k, off: f.off * 1.15, z: LINES.indexOf(f.line) },
     geometry: { type: "LineString", coordinates: f.pts } })) };
 }
 /* track colours are blended toward the map (trains and station rings keep the true CTA colour) */
@@ -670,7 +682,13 @@ function stationTier(id, s) {
 function stationFC() {
   return { type: "FeatureCollection", features: ST_IDS.map(id => { const s = ST[id];
     return { type: "Feature", id: +id, properties: { id, name: s.name, tier: stationTier(id, s), ring: s.lines.length > 1 ? "multi" : LCOL[s.lines[0]], lines: s.lines.join(",") },
-      geometry: { type: "Point", coordinates: [s.lon, s.lat] } }; }) };
+      geometry: { type: "Point", coordinates: onTrack(id, s) } }; }) };
+}
+/* where a station sits on its track(s): the station records are often at the street entrance, tens of metres off the line */
+function onTrack(id, s) {
+  const pts = []; for (const r of ROUTES) { const sp = r.stops.find(x => x.id === id); if (sp) { const p = along(r.coords, r.cum, sp.d); if (Math.hypot((p[0] - s.lon) * KX, p[1] - s.lat) * MPD < 400) pts.push(p); } }
+  if (!pts.length) return [s.lon, s.lat];
+  return [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
 }
 function metraFC() {
   const seen = new Set(), feats = [];
