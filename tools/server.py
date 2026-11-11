@@ -453,7 +453,8 @@ class Handler(SimpleHTTPRequestHandler):
             try: return self.send_json(get_transfers(float(q.get("lat", ["0"])[0]), float(q.get("lon", ["0"])[0]), (q.get("rt", [""])[0]).split(",")))
             except ValueError: return self.send_json({"error": "bad location"}, 400)
         if p in ("/", "/index.html"): self.path = "/index.html"
-        elif not p.startswith("/index.html"): return self.send_error(404)          # only the map page is served, never keys.env
+        elif p in ("/favicon.svg", "/apple-touch-icon.png", "/icon-512.png", "/manifest.webmanifest"): self.path = p   # the icons, served the same way as on the hosted site
+        elif not p.startswith("/index.html"): return self.send_error(404)          # only the map page and its icons are served, never keys.env
         return super().do_GET()
 
 if __name__ == "__main__":
