@@ -887,7 +887,7 @@ function drawVehicle(v, z, near3d, selKey) {
     if (z >= 16.5) return;
     tag(p.x, p.y - 22, v.label, v.color, isLight(v.color) ? "#16191d" : "#fff", false, null, .85 * a); return;
   }
-  if (z >= 10.8 && z < 14 && !isSel) {                        // middle zoom: the number on every train that has room, a dot where labels would overlap
+  if (z >= HOME.zoom + .35 && z < 14 && !isSel) {                 // dots at the home view and further out; numbers once you zoom in past it                        // middle zoom: the number on every train that has room, a dot where labels would overlap
     const f = fontPx(); octx.font = `700 ${f}px ${UI_FONT}`; const w = Math.max(f * 2.2, octx.measureText(v.label).width + f * 1.05) + (SET.arrows ? 8 : 0);
     if (roomFor(p.x, p.y, w, f + 7)) { tag(p.x, p.y, v.label, v.color, isLight(v.color) ? "#16191d" : "#fff", false, ang, a); return; }
   }
