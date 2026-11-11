@@ -144,6 +144,7 @@ function vehPos(coords,cum,d,dir){
   return {lon:p[0], lat:p[1], dx:(q[0]-p[0])*KX, dy:-(q[1]-p[1])};   // dx east, dy south (flat screen axes)
 }
 /* ================= buses (CTA bus routes, simulated frequencies) ================= */
+const BSA=/*__BSTOPALL__*/null, BSTOP_ALL=BSA.stops, BSTOP_RT=BSA.routes;   // every CTA bus stop: [lon, lat, name, NB/SB/EB/WB, route indexes, stop id]
 const BUS=BUSDATA.routes, BSTOPS=BUSDATA.stops, BUS_V=4.3;   // ≈9.6 mph average including stops
 const FREQ=new Set(["3","4","8","9","12","20","22","34","47","49","53","54","55","60","63","66","72","77","79","81","82","95","J14"]);
 const OWL=new Set(["4","9","20","22","34","49","53","55","60","62","66","77","79","81","87"]);

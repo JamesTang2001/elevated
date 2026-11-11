@@ -10,7 +10,7 @@ ns, npat = len(M["shapes"]), len(M["pats"])
 M["routes"].update(G["routes"]); M["stops"].update(G["stops"]); M["shapes"] += G["shapes"]
 M["pats"] += [[p[0], p[1] + ns] + p[2:] for p in G["pats"]]
 for d in M["trips"]: M["trips"][d] = sorted(M["trips"][d] + [[t[0] + npat] + t[1:] for t in G["trips"].get(d, [])], key=lambda x: x[1])
-for ph, f in [("DATA", "routes.json"), ("BUS", "bus.json"), ("RIDER", "ridership.json"), ("CTATT", "cta_rail_tt.json")]:
+for ph, f in [("DATA", "routes.json"), ("BUS", "bus.json"), ("RIDER", "ridership.json"), ("CTATT", "cta_rail_tt.json"), ("BSTOPALL", "bus_stops.json")]:
     app = app.replace(f"/*__{ph}__*/null", rd(f).strip())
 app = app.replace("/*__METRA__*/null", json.dumps(M, separators=(",", ":")))
 # last service date in each timetable, so the page can warn when one is about to run out

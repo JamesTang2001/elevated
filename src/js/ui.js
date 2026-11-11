@@ -185,6 +185,7 @@ function refreshPanel() {
   else if (selected.type === "bus") renderBus();
   else if (selected.type === "near") renderNear();
   else if (selected.type === "film") renderFilm();
+  else if (selected.type === "bstop") renderBusStop();
   const cb = c.querySelector(".cb"); if (cb) cb.scrollTop = keepScroll;
 }
 /* Ride along lives on the card: one button to board; once riding, pick the front or side window right there */
@@ -331,15 +332,37 @@ function arrivalsAt(id) {
 }
 function openStation(id) { stopFollow(); selected = { type: "station", id }; $("card").hidden = false; refreshPanel(); const s = ST[id]; map.easeTo({ center: [s.lon, s.lat], zoom: Math.max(map.getZoom(), 14.5), duration: 700, padding: panelPadding() }); }
 function renderStation() {
-  const s = ST[selected.id], rows = bestArrivals(selected.id).slice(0, 10), star = isStarred(selected.id);
+  const s = ST[selected.id], all = bestArrivals(selected.id).slice(0, 10), rows = selected.more ? all : all.slice(0, 4), star = isStarred(selected.id);
   let h = cardHead("L", "#1c2026", esc(s.name), s.kinds.map(k => ({ elev: "Elevated", sub: "Subway", grade: "At grade" })[k]).join(" · ") + (s.ada ? " · ♿ Accessible" : ""), `<button type="button" class="star${star ? " on" : ""}" data-act="star" aria-label="${star ? "Unstar" : "Star"} this station" title="${star ? "Starred" : "Star this station"}">${star ? "★" : "☆"}</button>`);
   h += `<div class="cb"><div class="lines">${s.lines.map(l => `<span style="background:${LCOL[l]};color:${dk(l) ? "#16191d" : "#fff"}">${LNAME[l]}</span>`).join("")}</div>`;
   h += alertHtml([...new Set(alertsForStation(selected.id).concat(s.lines.flatMap(l => ALERTS.list.filter(a => a.L.includes(l) && (a.major || a.sev >= 40)))))]);
   h += `<div class="sub">${rows.some(r => r.live) ? "Live arrivals" : "Next trains"}</div><div class="board">${rows.length ? rows.map(r => `<div class="row" data-follow="${esc(r.key)}"><span><i class="sw" style="display:inline-block;background:${LCOL[r.line]};margin-right:8px"></i>${esc(r.dest)}</span><span class="min">${mins(r.t) <= 0 ? "Due" : mins(r.t)}<small>${mins(r.t) <= 0 ? "" : " min"}</small></span></div>`).join("") : `<div class="note">No trains in the next 50 minutes.</div>`}</div>`;
-  h += `<div class="note">Tap a row to follow that train.</div></div>`;
+  if (all.length > rows.length) h += `<button type="button" class="btn more-btn" data-act="more">${all.length - rows.length} more trains</button>`;
+  h += `<div class="note">Tap a row to follow that train. While a station is open, only its trains keep their labels.</div></div>`;
   $("card").innerHTML = h;
 }
 function openMetraStop(id) { stopFollow(); selected = { type: "mstop", id }; $("card").hidden = false; refreshPanel(); const [, lon, lat] = METRA.stops[id]; map.easeTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 14), duration: 700, padding: panelPadding() }); }
+/* ---------- bus stops: tap one on the map (or in Near me) for its routes and next buses ---------- */
+function openBusStop(i) { stopFollow(); selected = { type: "bstop", i }; $("card").hidden = false; refreshPanel(); const s = BSTOP_ALL[i]; map.easeTo({ center: [s[0], s[1]], zoom: Math.max(map.getZoom(), 16), duration: 700, padding: panelPadding() }); }
+const DIRN = { NB: "Northbound", SB: "Southbound", EB: "Eastbound", WB: "Westbound" };
+function renderBusStop() {
+  const [lon, lat, name, dir, rs] = BSTOP_ALL[selected.i], rts = rs.map(k => BSTOP_RT[k]);
+  let h = cardHead("Bus", "#3a77a8", esc(name), `${DIRN[dir] || "Bus"} stop · ${rts.length} route${rts.length > 1 ? "s" : ""}`) + `<div class="cb"><div class="lines">${rts.map(r => `<span style="background:#3a77a8;color:#fff">${esc(r)}</span>`).join("")}</div>`;
+  if (liveCurrent() && LIVE.busKey) {
+    const key = lon.toFixed(4) + "," + lat.toFixed(4);
+    if ((XF.key !== key || Date.now() - XF.t > 60000) && !XF.busy) { XF.busy = true; if (XF.key !== key) XF.data = null; XF.key = key;
+      liveFetch(`/api/transfers?lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}&rt=${encodeURIComponent(rts.join(","))}`).then(d => { if (XF.key === key) { XF.data = d; XF.t = Date.now(); if (selected && selected.type === "bstop") refreshPanel(); } })
+        .catch(() => { XF.t = Date.now(); }).finally(() => { XF.busy = false; }); }
+    h += `<div class="sub">Next buses</div>`;
+    if (!XF.data || XF.key !== key) h += `<div class="note">Checking the buses at this stop…</div>`;
+    else { const now = chicagoNow(), rows = (XF.data.prd || []).map(p => Object.assign({}, p, { tm: parseBusTime(p.t) })).filter(p => p.tm && p.tm > now - 30000 && (p.m == null || p.m < 80)).sort((a, b) => a.tm - b.tm).slice(0, selected.more ? 12 : 4);
+      h += rows.length ? `<div class="board">${rows.map(p => `<div class="row"><span><b class="rt" style="background:#3a77a8;color:#fff">${esc(p.rt)}</b>to ${esc(p.des || "")}${p.dly ? ' <small style="color:var(--red)">delayed</small>' : ""}</span><span class="min">${Math.max(0, Math.round((p.tm - now) / 60000)) || "Due"}<small>${Math.round((p.tm - now) / 60000) > 0 ? " min" : ""}</small></span></div>`).join("")}</div>`
+        + (!selected.more && (XF.data.prd || []).length > 4 ? `<button type="button" class="btn more-btn" data-act="more">More buses</button>` : "") : `<div class="note">No buses predicted here in the next half hour.</div>`; }
+  } else h += `<div class="note">Live bus times appear when live data is on.</div>`;
+  const near = ST_IDS.map(id => [id, Math.hypot((ST[id].lon - lon) * KX, ST[id].lat - lat) * MPD]).filter(x => x[1] < 500).sort((a, b) => a[1] - b[1]).slice(0, 2);
+  if (near.length) h += `<div class="sub">L nearby</div>` + near.map(([id, m]) => `<div class="row" data-station="${id}"><span><b>${esc(ST[id].name)}</b> ${ST[id].lines.map(l => `<i class="sw" style="display:inline-block;background:${LCOL[l]};margin-left:4px"></i>`).join("")}</span><span class="min">${Math.max(1, Math.round(m / 80))}<small> min walk</small></span></div>`).join("");
+  $("card").innerHTML = h + `</div>`;
+}
 function renderMetraStop() {
   const id = selected.id, [name, lon0, lat0, ag0] = METRA.stops[id];
   const ids = Object.keys(METRA.stops).filter(k => { const q = METRA.stops[k]; return k === id || Math.hypot((q[1] - lon0) * KX, q[2] - lat0) * MPD < 250; });   // same station, other railroads
@@ -363,6 +386,7 @@ function renderBus() {
 }
 $("card").onclick = e => {
   const a = e.target.closest("[data-act]"), f = e.target.closest("[data-follow]"), ct = e.target.closest("[data-ct]");
+  if (a && a.dataset.act === "more") { selected.more = true; refreshPanel(); return; }
   if (a && a.dataset.act === "close") { if (zone.on) exitZone(); closePanel(); }
   else if (e.target.closest("[data-ridev]")) { SET.rideView = e.target.closest("[data-ridev]").dataset.ridev; saveSet(); RIDE.bearing = null; refreshPanel(); }
   else if (a && a.dataset.act === "star") toggleStar(selected.id);
@@ -371,6 +395,7 @@ $("card").onclick = e => {
   else if (f) followTrain(f.dataset.follow);
   else if (e.target.closest("[data-station]")) openStation(e.target.closest("[data-station]").dataset.station);
   else if (e.target.closest("[data-mstop]")) openMetraStop(e.target.closest("[data-mstop]").dataset.mstop);
+  else if (e.target.closest("[data-bstop]")) openBusStop(+e.target.closest("[data-bstop]").dataset.bstop);
   else if (ct) { cardTab = ct.dataset.ct; refreshPanel(); }
 };
 
@@ -394,7 +419,10 @@ function searchIndex() {
 }
 let SIDX = null, resSel = 0, resList = [];
 $("q").addEventListener("focus", () => { if (!$("q").value.trim()) renderHome(); });
-document.addEventListener("pointerdown", e => { if (!e.target.closest("#search")) { $("results").hidden = true; homeEditing = null; } });
+const SEARCH_DISMISS = { t: 0 };
+document.addEventListener("pointerdown", e => { if (e.target.closest("#search")) return;     // a tap outside search closes it and the keyboard, and does nothing else
+  const active = !$("results").hidden || document.activeElement === $("q") || document.body.classList.contains("search-open");
+  if (active) { closeSearch(); if (e.target.closest("#map")) SEARCH_DISMISS.t = Date.now(); } });
 $("q").addEventListener("input", () => {
   const q = $("q").value.trim().toLowerCase(), box = $("results");
   if (!q) { renderHome(); return; }

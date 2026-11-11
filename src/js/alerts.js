@@ -58,11 +58,17 @@ function renderNear() {
     .filter(([id]) => { const n = METRA.stops[id][0]; if (seenM.has(n)) return false; seenM.add(n); return true; }).slice(0, 2).filter(x => x[1] < 2500);
   const walk = m => `${Math.max(1, Math.round(m / 80))} min walk`;
   const when = ts => { if (!ts.length) return "–"; const v = ts.map(t => mins(t) <= 0 ? "Due" : mins(t)); return v.join(", ") + (typeof v[v.length - 1] === "number" ? "<small> min</small>" : ""); };
-  let h = cardHead("◎", "#3d4450", "Near you", L.length || M.length ? "Closest stations" : "No stations within a 30-minute walk");
+  let h = cardHead("◎", "#3d4450", "Near you", L.length || M.length ? "Closest stops and stations" : "No stations within a 30-minute walk");
   h += `<div class="cb">`;
   for (const [id, m] of L) { const s = ST[id], next = bestArrivals(id).slice(0, 2), al = alertsForStation(id);
     h += `<div class="row" data-station="${id}"><span><b>${esc(s.name)}</b> ${s.lines.map(l => `<i class="sw" style="display:inline-block;background:${LCOL[l]};margin-left:4px"></i>`).join("")}<small style="display:block;color:var(--ink3)">${walk(m)}${al.length ? " · ⚠ alert" : ""}</small></span><span class="min">${when(next.map(r => r.t))}</span></div>`; }
   for (const [id, m] of M) { const s = METRA.stops[id], next = metraDepartures(id, 120).slice(0, 2);
     h += `<div class="row" data-mstop="${id}"><span><b>${esc(s[0])}</b><small style="display:block;color:var(--ink3)">${s[3] === "ss" ? "South Shore" : "Metra"} · ${walk(m)}</small></span><span class="min">${when(next.map(r => r.tm))}</span></div>`; }
-  $("card").innerHTML = h + `<div class="note">Tap a station for its full board. Walking times assume a straight line.</div></div>`;
+  const B = [], seenB = new Set(); for (const [i, m] of BSTOP_ALL.map((s, i) => [i, Math.abs(s[1] - lat) < .006 ? d(s[0], s[1]) : 1e9]).filter(x => x[1] < 450).sort((a, b) => a[1] - b[1])) { const k = BSTOP_ALL[i][2] + BSTOP_ALL[i][3]; if (seenB.has(k)) continue; seenB.add(k); B.push([i, m]); if (B.length === 4) break; }
+  if (B.length) h += `<div class="sub">Bus stops</div>` + B.map(([i, m]) => { const s = BSTOP_ALL[i], rts = s[4].map(k => BSTOP_RT[k]);
+    return `<div class="row" data-bstop="${i}"><span><b>${esc(s[2])}</b><small style="display:block;color:var(--ink3)">${DIRN[s[3]] || "Bus"} · ${rts.slice(0, 5).map(esc).join(", ")} · ${walk(m)}</small></span><span class="min">›</span></div>`; }).join("");
+  const dock = WT_DOCKS.map(([n, x, y, k]) => [n, k, d(x, y)]).filter(x => x[2] < 2500).sort((a, b) => a[2] - b[2])[0];
+  if (dock && boatsOn()) { const next = wtDepartures(dock[1], simT, simT + 3 * 3600000).slice(0, 2);
+    h += `<div class="sub">Water taxi</div><div class="row"><span><b>${esc(dock[0])}</b><small style="display:block;color:var(--ink3)">${walk(dock[2])}</small></span><span class="min">${next.length ? when(next.map(w => w.t)) : "–"}</span></div>`; }
+  $("card").innerHTML = h + `<div class="note">Tap a stop for its next trains or buses. Walking times assume a straight line.</div></div>`;
 }

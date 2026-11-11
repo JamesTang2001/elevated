@@ -129,6 +129,11 @@ function addTransitLayers() {
         "line-offset": ["interpolate", ["linear"], ["zoom"], 15, ["+", ["*", ["get", "off"], 7], 2.6 * side], 18, ["+", ["*", ["get", "off"], 16], 7 * side]], "line-opacity": trackOpacity(1, "rail") } }, before);
   if (dark) map.addLayer({ id: "l-core", type: "line", source: "lines", filter: lineFilter(), layout: { "line-join": "round", "line-cap": "round" },
     paint: { "line-color": ["get", "color"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, .8, 13, 1.6, 16, 2.6], "line-blur": .6, "line-offset": OFF, "line-opacity": trackOpacity(.32, "glow") } }, before);
+  // bus stops: small white rings with a blue edge, close in (tap for the next buses)
+  if (!map.getSource("bstop")) map.addSource("bstop", { type: "geojson", data: { type: "FeatureCollection", features: BSTOP_ALL.map((s, i) => ({ type: "Feature", id: i, properties: { i, n: s[2] }, geometry: { type: "Point", coordinates: [s[0], s[1]] } })) } });
+  map.addLayer({ id: "bus-stop", type: "circle", source: "bstop", minzoom: 14.6, layout: { visibility: busStopsOn() ? "visible" : "none" },
+    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 14.6, 2, 16, 3.6, 18, 5.5], "circle-color": dark ? "#0e131b" : "#ffffff", "circle-stroke-color": dark ? "#7fb2db" : "#3a77a8",
+      "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 14.6, 1, 17, 1.8], "circle-opacity": ["interpolate", ["linear"], ["zoom"], 14.6, 0, 15, 1], "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 14.6, 0, 15, 1], "circle-pitch-alignment": "map" } });
   // Metra stations (small, quiet), then L stations in tiers
   map.addLayer({ id: "metra-st", filter: agFilter(), type: "circle", source: "metra-st", minzoom: 10, layout: { visibility: railOn() ? "visible" : "none" },
     paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 1.8, 13, 3, 16, 5], "circle-color": dark ? "#1b2330" : "#ffffff",
@@ -138,7 +143,7 @@ function addTransitLayers() {
     paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 6, 16, 14], "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#f0a020", "circle-stroke-width": 2,
       "circle-stroke-opacity": ["case", ["boolean", ["feature-state", "alert"], false], .85, 0], "circle-pitch-alignment": "map" } });
   map.addLayer({ id: "st-dot", type: "circle", source: "st", minzoom: 9,
-    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, R(2.6, 2.1, 1.6), 12, R(4.4, 3.4, 2.6), 16, R(8.4, 7.2, 6.2)],
+    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, R(3.2, 2.7, 2.2), 12, R(5.2, 4.3, 3.5), 16, R(8.6, 7.4, 6.4)],
       "circle-color": dark ? "#f4f2ec" : "#ffffff",
       "circle-stroke-color": ["case", ["==", ["get", "ring"], "multi"], dark ? "#0e131b" : "#1e2329", ["get", "ring"]],
       "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 9, ["match", ["get", "tier"], 0, 1.6, 1.2], 16, ["match", ["get", "tier"], 0, 2.6, 2.1]],
@@ -160,8 +165,10 @@ function busLineOpacity() {
   if (SET.buses === "off" || !lineOn("bus")) return 0;
   return ["interpolate", ["linear"], ["zoom"], 11, SET.buses === "all" ? .35 : 0, 13, SET.buses === "all" ? .5 : .28, 16, .45];
 }
+const busStopsOn = () => SET.buses !== "off" && lineOn("bus");
 function refreshTransitPaint() {                          // settings that only change paint/filters (no style reload)
   if (!map || !map.getLayer("l-line")) return;
+  if (map.getLayer("bus-stop")) map.setLayoutProperty("bus-stop", "visibility", busStopsOn() ? "visible" : "none");
   const f = lineFilter();
   for (const id of ["l-glow", "l-case", "l-line", "l-core", "l-rail-a", "l-rail-b"]) if (map.getLayer(id)) {
     map.setFilter(id, f);
@@ -273,6 +280,7 @@ function screenAngle(lon, lat, dlon, dlat) {
 function drawOverlay() {
   octx.setTransform(ODPR, 0, 0, ODPR, 0, 0); octx.clearRect(0, 0, OW, OH); hits = []; placed.length = 0;
   drawSky(); HZ.y = groundTop();
+  FOCUS.keys = selected && selected.type === "station" ? new Set(bestArrivals(selected.id).slice(0, 10).map(r => r.key)) : null;   // a station is open: its trains keep their labels
   if (HZ.y > 0) { const n = parseInt(SKYC.hor.slice(1), 16), rgb = `${n >> 16 & 255},${n >> 8 & 255},${n & 255}`, g = octx.createLinearGradient(0, HZ.y - 3, 0, HZ.y + 46);   // soft haze where the ground meets the sky
     g.addColorStop(0, `rgba(${rgb},.85)`); g.addColorStop(.35, `rgba(${rgb},.35)`); g.addColorStop(1, `rgba(${rgb},0)`); octx.fillStyle = g; octx.fillRect(0, HZ.y - 3, OW, 49); }
   if (RIDE.on) { drawWeather(octx, OW, OH, map.getZoom()); return; }          // riding along: just the city and the weather, no labels
@@ -286,12 +294,16 @@ function drawOverlay() {
   drawWeather(octx, OW, OH, z);
 }
 /* vehicles beyond the edge of the drawn ground would float against the sky: fade them out toward it */
-const HZ = { y: -1e9 }, horizonFade = y => Math.max(0, Math.min(1, (y - HZ.y - 10) / 40));
+const FOCUS = { keys: null }, HZ = { y: -1e9 }, horizonFade = y => Math.max(0, Math.min(1, (y - HZ.y - 10) / 40));
 const placed = [];                                                // number tags already drawn this frame (to avoid overlaps at middle zoom)
 function roomFor(x, y, w, h) { for (const r of placed) if (Math.abs(r[0] - x) < (r[2] + w) / 2 + 2 && Math.abs(r[1] - y) < (r[3] + h) / 2 + 1) return false; placed.push([x, y, w, h]); return true; }
 function drawVehicle(v, z, near3d, selKey) {
   const p = map.project([v.lon, v.lat]); if (p.x < -40 || p.x > OW + 40 || p.y < -40 || p.y > OH + 40) return;
   const hf = v.key === selKey ? 1 : horizonFade(p.y); if (hf <= 0) return;
+  if (FOCUS.keys && !FOCUS.keys.has(v.key) && v.key !== selKey) {      // other trains step back to small, quiet dots
+    hits.push({ type: v.type, key: v.key, x: p.x, y: p.y, r: 10 }); if (near3d) return;
+    octx.globalAlpha = .55 * hf; octx.beginPath(); octx.arc(p.x, p.y, 2.6, 0, 7); octx.fillStyle = v.color; octx.fill(); octx.globalAlpha = 1; return;
+  }
   const isSel = v.key === selKey;
   const ang = screenAngle(v.lon, v.lat, v.dx / KX * 1e-4, -v.dy * 1e-4);
   const sub = v.kind === "sub", a = (sub && z >= 14 ? (SET.seeThrough === "see" ? .55 : .8) : 1) * hf;
@@ -331,13 +343,14 @@ function hitTest(x, y) {
   return best;
 }
 function onMapClick(e) {
+  if (Date.now() - SEARCH_DISMISS.t < 700) return;             // that tap only closed the search box and the keyboard
   const h = hitTest(e.point.x, e.point.y);
   if (zone.on && !h) return;                                   // in zone out, tapping empty map does nothing; tapping a vehicle switches to it
   if (zone.on && h && h.type !== "bus" && zone.mode === "follow") { zone.key = h.key; zone.picked = performance.now(); selected = { type: h.type, key: h.key }; openTrainCard(); return; }
   if (h) { if (h.type === "bus") openBus(h.key); else followTrain(h.key); return; }
-  const f = map.queryRenderedFeatures([[e.point.x - 6, e.point.y - 6], [e.point.x + 6, e.point.y + 6]], { layers: ["st-dot", "st-lab-0", "st-lab-1", "st-lab-2", "metra-st", "metra-lab"].filter(id => map.getLayer(id)) });
-  if (f.length) { const p = f[0].properties; if (f[0].source === "st") openStation(p.id); else openMetraStop(p.id); return; }
-  if (selected && selected.type !== "train" && selected.type !== "metra") closePanel();
+  const f = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: ["st-dot", "st-lab-0", "st-lab-1", "st-lab-2", "metra-st", "metra-lab", "bus-stop"].filter(id => map.getLayer(id)) });
+  if (f.length) { const p = f[0].properties; if (f[0].source === "st") openStation(p.id); else if (f[0].source === "bstop") openBusStop(p.i); else openMetraStop(p.id); }
+  // tapping empty map keeps the card open: only its ✕ closes it
 }
 
 /* ---------- trackpad and touch gestures that also work while following ----------
