@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Elevated · Chicago transit, live</title>
+<meta name="description" content="A live 3D map of Chicago's L, Metra and buses. Inspired by Rail Island (railisland.tw).">
+<style>/*__MLCSS__*/</style>
+<style>
+:root{
+  --f:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,sans-serif;
+  --bg:#f3f1ec; --panel:rgba(255,255,255,.86); --panel-solid:#ffffff; --line:rgba(20,24,30,.09); --ink:#1c2026; --ink2:#5b616b; --ink3:#8b9099;
+  --acc:#1c2026; --chip:#efede8; --chip-on:#1c2026; --chip-on-ink:#fff; --shadow:0 10px 30px rgba(20,24,30,.12),0 1px 3px rgba(20,24,30,.08);
+  --red:#d6363e; --ok:#1f9d55; --blur:saturate(160%) blur(18px); --fs:13px;
+}
+:root[data-ui="dark"]{
+  --bg:#0e131b; --panel:rgba(18,24,34,.84); --panel-solid:#141b26; --line:rgba(255,255,255,.08); --ink:#e9edf2; --ink2:#a3acb9; --ink3:#6f7a89;
+  --acc:#e9edf2; --chip:#1d2633; --chip-on:#e9edf2; --chip-on-ink:#0e131b; --shadow:0 12px 34px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.4);
+}
+:root[data-translucent="1"]{ --panel:rgba(255,255,255,.62); }
+:root[data-ui="dark"][data-translucent="1"]{ --panel:rgba(18,24,34,.58); }
+:root[data-font="s"]{ --fs:12px } :root[data-font="l"]{ --fs:14.5px }
+*{ box-sizing:border-box } [hidden]{ display:none!important }
+html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink); font:400 var(--fs)/1.4 var(--f); -webkit-font-smoothing:antialiased; overflow:hidden }
+button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer; padding:0 }
+#sky{ position:fixed; inset:0; width:100%; height:100%; pointer-events:none } #map{ position:fixed; inset:0 } #overlay{ position:fixed; inset:0; pointer-events:none; z-index:2 }
+.glass{ background:var(--panel); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); border:1px solid var(--line); box-shadow:var(--shadow); border-radius:14px }
+.ui{ position:fixed; z-index:5; transition:opacity .5s ease }
+/* top-left brand + clock */
+#brand{ top:14px; left:14px; display:flex; gap:8px; align-items:stretch }
+.wordmark{ padding:9px 14px 8px; display:flex; flex-direction:column; justify-content:center }
+.wordmark b{ font-size:17px; letter-spacing:.02em; font-weight:700 } .wordmark span{ font-size:10.5px; color:var(--ink3); letter-spacing:.14em; text-transform:uppercase; margin-top:1px }
+#clock{ padding:8px 13px; display:flex; flex-direction:column; justify-content:center; min-width:150px; cursor:pointer }
+#clock .t{ font-size:19px; font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.01em }
+#clock .s{ font-size:11px; color:var(--ink2); display:flex; align-items:center; gap:6px }
+.dot{ width:7px; height:7px; border-radius:50%; background:var(--ink3); display:inline-block } .dot.live{ background:var(--ok); box-shadow:0 0 0 3px rgba(31,157,85,.18) }
+#systems{ top:14px; left:50%; transform:translateX(-50%); padding:4px; display:flex; gap:2px }
+.seg{ display:flex; gap:2px; background:var(--chip); border-radius:10px; padding:3px }
+.seg button{ padding:6px 12px; border-radius:8px; font-weight:560; color:var(--ink2); white-space:nowrap }
+.seg button[aria-pressed="true"]{ background:var(--panel-solid); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.12) }
+#systems .seg{ background:transparent }
+/* search */
+#search{ top:14px; right:14px; width:290px; z-index:7 }
+#search{ display:flex; flex-wrap:wrap; align-items:center } #nearBtn{ width:34px; height:34px; margin-right:4px; border-radius:9px; display:grid; place-items:center; color:var(--ink2) } #nearBtn:hover{ background:var(--chip); color:var(--ink) }
+#results{ flex-basis:100% }
+.alert{ border-left:3px solid #f0a020; background:rgba(240,160,32,.1); border-radius:6px; padding:7px 9px; margin:8px 0; font-size:12px; line-height:1.35 } .alert b{ display:block; margin-bottom:2px } .alert span{ color:var(--ink2) }
+.me-dot{ width:14px; height:14px; border-radius:50%; background:#2f7bf6; border:3px solid #fff; box-shadow:0 0 0 6px rgba(47,123,246,.25) }
+#search input{ flex:1; width:auto; border:0; background:transparent; padding:12px 14px; font:inherit; color:var(--ink); outline:none }
+#search input::placeholder{ color:var(--ink3) }
+#results{ border-top:1px solid var(--line); max-height:52vh; overflow:auto; padding:4px }
+.home{ padding:4px 6px 8px } .hs{ font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); margin:10px 4px 6px }
+.ls{ display:flex; flex-wrap:wrap; gap:6px } .ls span{ display:flex; align-items:center; gap:5px; font-size:11.5px; padding:3px 8px 3px 6px; border-radius:20px; background:var(--chip) } .ls i{ width:8px; height:8px; border-radius:50% } .ls b{ color:#f0a020; margin-left:1px }
+.hrow{ display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; text-align:left; padding:7px 6px; border-radius:9px } button.hrow:hover,.hgo:hover{ background:var(--chip) } .hrow b{ margin-right:6px } .hrow .sw{ display:inline-block; margin-right:3px } .hrow small{ color:var(--ink3); white-space:nowrap }
+.hgo{ flex:1; text-align:left; padding:4px 6px; border-radius:8px } .hx{ width:26px; height:26px; border-radius:7px; color:var(--ink3) } .hx:hover{ background:var(--chip); color:var(--ink) }
+.hacts{ display:flex; gap:6px; margin-top:10px } .hacts button{ flex:1; padding:8px; border-radius:9px; background:var(--chip); font-size:12px; font-weight:600 } .hnote{ font-size:11.5px; color:var(--ink3); margin:8px 4px 0 }
+.hedit{ display:flex; gap:6px; margin-top:10px } .hedit input{ flex:1; padding:8px 10px; border-radius:9px; border:1px solid var(--line); background:transparent; color:var(--ink); font:inherit } .hedit button{ padding:8px 12px; border-radius:9px; background:var(--ink); color:var(--bg); font-weight:600 }
+.story{ margin:10px 0 2px; padding:8px 10px; border-radius:9px; background:var(--chip); font-size:12px; color:var(--ink2); font-style:italic }
+.star{ font-size:18px; width:32px; height:32px; border-radius:9px; color:var(--ink3) } .star.on{ color:#f0b020 } .star:hover{ background:var(--chip) }
+.film{ display:flex; align-items:center; gap:6px; border:0; padding:0; background:none; cursor:pointer; font:600 11.5px/1.2 inherit; color:var(--ink) }
+.film i{ position:relative; display:grid; place-items:center; width:28px; height:28px; border-radius:50%; background:#16191d; color:#e8c04a; border:2px solid #e8c04a; box-shadow:0 2px 6px rgba(0,0,0,.35); transition:transform .15s }
+.film i b{ position:absolute; top:-6px; right:-7px; min-width:15px; height:15px; padding:0 3px; border-radius:8px; background:#e8c04a; color:#16191d; font:700 10px/15px inherit; text-align:center }
+.film span{ display:none; white-space:nowrap; padding:3px 8px; border-radius:7px; background:var(--panel-solid); box-shadow:0 1px 4px rgba(0,0,0,.25) }
+.film:hover i{ transform:scale(1.12) } .film:hover span, body.films-near .film span{ display:block }
+.filmrow{ padding:8px 0; border-bottom:1px solid var(--line) } .filmrow small{ color:var(--ink3) } .filmrow p{ margin:3px 0 0; color:var(--ink2); font-size:13px; line-height:1.4 }
+.spot{ display:flex; align-items:center; gap:5px; pointer-events:none } .spot i{ width:12px; height:12px; border-radius:50%; background:#e85d75; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4) } .spot span{ font-size:11.5px; font-weight:600; padding:2px 6px; border-radius:6px; background:var(--panel); color:var(--ink) }
+.res{ display:flex; gap:10px; align-items:center; width:100%; text-align:left; padding:8px 10px; border-radius:9px }
+.res:hover,.res.on{ background:var(--chip) } .res small{ color:var(--ink3); margin-left:auto; font-size:11px }
+.sw{ width:10px; height:10px; border-radius:3px; flex:none }
+/* right rail */
+#rail{ right:14px; top:76px; display:flex; flex-direction:column; gap:10px; align-items:flex-end }
+#tabs{ display:flex; flex-direction:column; padding:5px; gap:2px }
+#tabs button{ width:54px; padding:8px 0 6px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--ink2); font-size:10.5px; font-weight:560 }
+#tabs button svg{ width:18px; height:18px } #tabs button[aria-pressed="true"]{ background:var(--chip); color:var(--ink) }
+#nav{ display:flex; flex-direction:column; padding:4px; gap:2px; width:44px }
+#nav button,#lockBtn{ height:34px; border-radius:9px; display:grid; place-items:center; color:var(--ink2) } #nav button:hover{ background:var(--chip); color:var(--ink) }
+#compass{ position:relative } #compass svg{ transition:transform .1s linear }
+#compass .dir{ position:absolute; right:3px; bottom:2px; font-size:8.5px; font-weight:700; letter-spacing:.02em; color:var(--ink3); pointer-events:none }
+#lockBtn{ width:44px; padding:0 } #lockBtn.free{ width:auto; padding:0 14px; background:var(--red); color:#fff; border-color:transparent; font-weight:600 }
+/* settings panel */
+#settings{ right:84px; top:76px; width:330px; max-height:calc(100vh - 170px); display:flex; flex-direction:column }
+.ph{ display:flex; align-items:center; justify-content:space-between; padding:13px 16px 10px; border-bottom:1px solid var(--line) }
+.ph b{ font-size:14px; font-weight:650 } .x{ width:28px; height:28px; border-radius:8px; display:grid; place-items:center; color:var(--ink2) } .x:hover{ background:var(--chip) }
+.pb{ overflow:auto; padding:6px 16px 14px }
+.row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px solid var(--line) } .row:last-child{ border-bottom:0 }
+.row > span{ font-weight:560 } .row .seg button{ padding:5px 10px }
+.note{ color:var(--ink3); font-size:11.5px; line-height:1.5; padding:10px 0 2px }
+.tg{ width:38px; height:22px; border-radius:11px; background:var(--chip); position:relative; transition:background .2s; flex:none; border:1px solid var(--line) }
+.tg::after{ content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); transition:transform .2s }
+.tg[aria-checked="true"]{ background:var(--ok) } .tg[aria-checked="true"]::after{ transform:translateX(16px) }
+.sub{ font-size:11px; color:var(--ink3); letter-spacing:.08em; text-transform:uppercase; padding:14px 0 6px; font-weight:600 }
+.chips{ display:flex; flex-wrap:wrap; gap:6px; padding:4px 0 8px }
+.chip{ display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:20px; background:var(--chip); font-weight:560; font-size:12px; border:1px solid transparent }
+.chip[aria-pressed="false"]{ opacity:.45; background:transparent; border-color:var(--line) }
+.view{ display:flex; justify-content:space-between; align-items:center; width:100%; text-align:left; padding:10px 0; border-bottom:1px solid var(--line) }
+.view b{ display:block; font-weight:600 } .view small{ color:var(--ink3) } .view:last-child{ border-bottom:0 }
+.link{ color:var(--ink); text-decoration:underline; text-underline-offset:2px }
+/* left card */
+#card{ left:14px; top:84px; width:320px; max-height:calc(100vh - 180px); display:flex; flex-direction:column; overflow:hidden }
+.ch{ padding:14px 16px 10px; display:flex; gap:10px; align-items:flex-start }
+.badge{ min-width:34px; height:24px; padding:0 8px; border-radius:12px; display:grid; place-items:center; font-weight:700; font-size:12px; color:#fff; flex:none; margin-top:1px }
+.ch .tt{ flex:1; min-width:0 } .ch .tt b{ font-size:15px; font-weight:650; display:block } .ch .tt span{ color:var(--ink2); font-size:12px }
+.spd{ text-align:right; font-variant-numeric:tabular-nums } .spd b{ font-size:20px; font-weight:650 } .spd span{ font-size:11px; color:var(--ink3) }
+.cb{ padding:0 16px 14px; overflow:auto }
+.kv{ display:grid; grid-template-columns:1fr auto; gap:2px 12px; padding:10px 0; border-top:1px solid var(--line) }
+.kv .k{ color:var(--ink3); font-size:11px; text-transform:uppercase; letter-spacing:.08em; font-weight:600 } .kv .v{ font-size:16px; font-weight:650 } .kv .r{ text-align:right; font-variant-numeric:tabular-nums }
+.bar{ height:4px; border-radius:2px; background:var(--chip); overflow:hidden; margin:4px 0 4px } .bar i{ display:block; height:100%; border-radius:2px }
+.meta{ display:flex; justify-content:space-between; color:var(--ink3); font-size:11.5px; font-variant-numeric:tabular-nums }
+.ctabs{ display:flex; gap:4px; margin:12px 0 6px } .ctabs button{ padding:5px 10px; border-radius:8px; color:var(--ink2); font-weight:560; font-size:12px } .ctabs button[aria-pressed="true"]{ background:var(--chip); color:var(--ink) }
+.stops{ list-style:none; margin:0; padding:0 } .stops li{ display:flex; align-items:center; gap:10px; padding:5px 0; font-variant-numeric:tabular-nums }
+.stops li i{ width:9px; height:9px; border-radius:50%; border:2px solid var(--c); flex:none; background:var(--panel-solid) }
+.stops li.past{ color:var(--ink3) } .stops li.past i{ background:var(--c); opacity:.5 } .stops li.next{ font-weight:650 } .stops li.next i{ background:var(--c); box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 30%,transparent) }
+.stops li span{ flex:1 } .stops time{ color:var(--ink2); font-size:12px }
+.board .row{ padding:9px 0; cursor:pointer }
+.board.xf .row{ cursor:default; align-items:flex-start } .board.xf .row:hover{ background:none; margin:0; padding:9px 0 }
+.board.xf .rt{ display:inline-block; min-width:30px; padding:1px 6px; margin-right:8px; border-radius:6px; background:#3a77a8; color:#fff; font-size:12px; text-align:center }
+.board.xf small{ display:block; color:var(--ink3); font-size:11px; margin:2px 0 0 38px } .board.xf .min{ text-align:right } .board.xf em{ display:block; font-style:normal; font-size:11px; color:var(--ok); white-space:nowrap }
+.board.xf .miss{ opacity:.5 } .board.xf .miss em{ color:var(--ink3) } .board .row:hover{ background:var(--chip); margin:0 -8px; padding:9px 8px; border-radius:8px }
+.min{ font-size:16px; font-weight:650; font-variant-numeric:tabular-nums } .min small{ font-size:11px; color:var(--ink3); font-weight:500 }
+.acts{ display:flex; gap:8px; padding-top:12px } .btn{ flex:1; padding:9px 12px; border-radius:10px; background:var(--chip); font-weight:600; text-align:center } .btn:hover{ filter:brightness(.97) }
+.btn.pri{ background:var(--acc); color:var(--chip-on-ink) }
+svg.curve{ width:100%; height:64px; display:block }
+.lines{ display:flex; gap:5px; flex-wrap:wrap; margin-top:6px } .lines span{ font-size:11px; font-weight:650; color:#fff; padding:2px 8px; border-radius:10px }
+/* bottom time bar */
+#timebar{ left:50%; transform:translateX(-50%); bottom:16px; display:flex; align-items:center; gap:10px; padding:7px 10px; max-width:calc(100vw - 28px) }
+.ib{ width:36px; height:36px; border-radius:10px; display:grid; place-items:center; color:var(--ink) } .ib:hover{ background:var(--chip) }
+.ib.on{ background:var(--chip) }
+#speed{ display:flex; flex-direction:column; width:150px } #speed input{ width:100%; accent-color:var(--acc) }
+#speed .ticks{ display:flex; justify-content:space-between; color:var(--ink3); font-size:10px; margin-top:-2px } #speedVal{ font-weight:650; color:var(--red); width:30px; font-variant-numeric:tabular-nums }
+#day{ width:170px; height:34px; cursor:pointer; display:block }
+.sep{ width:1px; height:26px; background:var(--line) }
+.pill{ padding:8px 12px; border-radius:10px; font-weight:600; background:var(--chip) } .pill:hover{ filter:brightness(.97) }
+.tool{ display:flex; flex-direction:column; align-items:center; gap:1px; font-size:10px; color:var(--ink2); padding:3px 6px; border-radius:9px; font-weight:560 } .tool:hover{ background:var(--chip); color:var(--ink) }
+.tool svg{ width:18px; height:18px }
+#music{ display:flex; align-items:center; gap:2px }
+#toast{ left:50%; transform:translateX(-50%); bottom:84px; padding:10px 16px; max-width:min(520px,90vw); text-align:center; font-weight:540 }
+#zoneBar{ top:14px; right:14px; display:flex; align-items:center; gap:8px; padding:6px }
+.maplibregl-ctrl-attrib{ font-size:10.5px!important; background:var(--panel)!important; color:var(--ink3)!important; border-radius:8px!important }
+.maplibregl-ctrl-attrib a{ color:var(--ink2)!important } .maplibregl-ctrl-bottom-right{ z-index:4 }
+/* zone-out + theatre + minimal */
+body.zone #systems, body.zone #search, body.zone #rail, body.zone #settings, body.zone .tools-n, body.zone #brand .wordmark{ display:none!important }
+body.riding #systems, body.riding #search, body.riding #rail, body.riding #settings, body.riding #lockBtn{ display:none!important }
+body.zone #card{ width:280px }
+body.theatre .ui:not(#toast){ opacity:0; pointer-events:none }
+body.zone.zone-nocard #card{ display:none!important }
+#loading{ position:fixed; inset:0; z-index:50; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; background:var(--bg); transition:opacity .6s } #loading.gone{ opacity:0; pointer-events:none }
+#loading b{ font-size:28px; letter-spacing:-.01em } #loading span{ color:var(--ink3); font-size:13px } #loading i{ width:120px; height:3px; border-radius:2px; background:linear-gradient(90deg,transparent,var(--ink2),transparent); background-size:200% 100%; animation:ld 1.2s linear infinite } @keyframes ld{ from{ background-position:100% 0 } to{ background-position:-100% 0 } }
+@media (prefers-reduced-motion: reduce){ #loading i{ animation:none } }
+#zoneBar .zb{ padding:7px 10px; border-radius:9px; font-size:12px; font-weight:600; color:var(--ink2); white-space:nowrap } #zoneBar .zb:hover{ background:var(--chip); color:var(--ink) }
+body:not(.zone) #zoneBar{ display:none }
+@media (max-width:1180px) and (min-width:1031px){ #systems{ left:auto; right:322px; transform:none } }       /* keep clear of the clock and search */
+@media (max-width:1030px) and (min-width:761px){ #systems{ top:auto; bottom:96px } }
+@media (max-width:760px){
+  #systems{ top:auto; bottom:76px } #search{ width:calc(100vw - 28px); top:66px } #brand{ top:10px; left:10px } .wordmark span{ display:none }
+  #rail{ top:122px; right:10px } #settings{ right:10px; left:10px; width:auto; top:122px; max-height:60vh }
+  #card{ left:0; right:0; top:auto; bottom:0; width:auto; border-radius:16px 16px 0 0; max-height:48vh }
+  #timebar{ bottom:10px; gap:6px } #day,#speed .ticks,.tool span{ display:none } #speed{ width:90px }
+}
+</style>
+</head>
+<body>
+<canvas id="sky"></canvas><div id="map"></div><canvas id="overlay"></canvas>
+<div id="loading"><b>Elevated</b><span>Loading Chicago transit…</span><i></i></div>
+
+<div id="brand" class="ui">
+  <div class="wordmark glass"><b>Elevated</b><span>Chicago transit</span></div>
+  <button id="clock" class="glass" type="button" title="Data status"><span class="t" id="clockT">--:--</span><span class="s"><i class="dot" id="clockDot"></i><span id="clockS">Scheduled</span></span></button>
+</div>
+
+<div id="systems" class="ui glass"><div class="seg" id="sysSeg">
+  <button type="button" data-sys="all" aria-pressed="true">All</button><button type="button" data-sys="l" aria-pressed="false">L</button>
+  <button type="button" data-sys="rail" aria-pressed="false" title="Metra, Amtrak and South Shore">Rail</button><button type="button" data-sys="bus" aria-pressed="false">Bus</button><button type="button" data-sys="boats" aria-pressed="false">Boats</button></div></div>
+
+<div id="search" class="ui glass"><input id="q" type="search" placeholder="Search stations, lines, trains, places" autocomplete="off" spellcheck="false"><button type="button" id="nearBtn" title="Stations near me" aria-label="Stations near me"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button><div id="results" hidden></div></div>
+
+<div id="rail" class="ui">
+  <div id="tabs" class="glass" role="tablist">
+    <button type="button" data-tab="view" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 17l9 4 9-4M3 12l9 4 9-4M12 3l9 4-9 4-9-4 9-4z"/></svg>View</button>
+    <button type="button" data-tab="map" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>Map</button>
+    <button type="button" data-tab="trains" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M8 21l2-4M16 21l-2-4"/><circle cx="9" cy="14" r=".8" fill="currentColor"/><circle cx="15" cy="14" r=".8" fill="currentColor"/></svg>Vehicles</button>
+    <button type="button" data-tab="labels" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.3"/><circle cx="4.5" cy="12" r="1.3"/><circle cx="4.5" cy="18" r="1.3"/></svg>Layers</button>
+    <button type="button" data-tab="display" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 000 18z" fill="currentColor"/></svg>Display</button>
+  </div>
+  <div id="nav" class="glass">
+    <button type="button" id="zin" title="Zoom in"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10"/></svg></button>
+    <button type="button" id="zout" title="Zoom out"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.8"><path d="M3 8h10"/></svg></button>
+    <button type="button" id="homeBtn" title="Chicago view (H) · tap again for downtown"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2.5 7.5L8 3l5.5 4.5V13a.5.5 0 01-.5.5H9.5V10h-3v3.5H3a.5.5 0 01-.5-.5z"/></svg></button>
+    <button type="button" id="compass" title="Tap to face north"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 2l3 7H6z" fill="#d6363e"/><path d="M9 16l-3-7h6z" fill="currentColor" opacity=".45"/></svg><span class="dir">N</span></button>
+  </div>
+  <button type="button" id="lockBtn" class="glass" hidden title="Map follows the train · drag the map to look around"></button>
+</div>
+
+<div id="settings" class="ui glass" hidden><div class="ph"><b id="setTitle">View</b><button class="x" type="button" id="setClose" aria-label="Close">✕</button></div><div class="pb" id="setBody"></div></div>
+<div id="card" class="ui glass" hidden></div>
+
+<div id="timebar" class="ui glass">
+  <button type="button" class="ib" id="play" title="Pause / play (space)"></button>
+  <div id="speed"><input type="range" id="spd" min="0" max="11" value="0" aria-label="Speed"><div class="ticks"><span>1×</span><span>10×</span><span>30×</span><span>60×</span></div></div>
+  <span id="speedVal">1×</span>
+  <svg id="day" viewBox="0 0 170 34" preserveAspectRatio="none" aria-label="Trains running through the day; click to jump"></svg>
+  <button type="button" class="pill" id="nowBtn">Now</button>
+  <span class="sep tools-n"></span>
+  <button type="button" class="tool tools-n" id="randBtn" title="Follow a random train"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg><span>Random</span></button>
+  <button type="button" class="tool tools-n" id="shareBtn" title="Copy a link to this view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v13"/></svg><span>Share</span></button>
+  <button type="button" class="tool tools-n" id="aboutBtn" title="About Elevated"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>About</span></button>
+  <span class="sep"></span>
+  <button type="button" class="pill zone-keep" id="zoneBtn">Zone out</button>
+  <div id="music" class="zone-keep" hidden><button type="button" class="ib" id="musicBtn" title="Music on / off">♪</button><button type="button" class="ib" id="skipBtn" title="Next style">⏭</button></div>
+</div>
+<div id="zoneBar" class="ui glass zone-keep"><div class="seg"><button type="button" data-zm="follow" title="The camera rides with one vehicle">Follow</button><button type="button" data-zm="group" title="The camera drifts over the busiest spot">Group</button><button type="button" data-zm="free" title="You drive the camera; controls stay hidden">Free</button></div><button type="button" class="zb" id="zCam" title="Follow camera"></button><button type="button" class="zb" id="zAngle" title="Map angle"></button><button type="button" class="zb" id="zCard" title="Show or hide the card"></button><button type="button" class="pill" id="zoneExit">Leave</button></div>
+<div id="toast" class="ui glass" hidden></div>
+
+<script>/*__MLJS__*/</script>
+<script>/*__THREEJS__*/</script>
+<script>
+/*__APP__*/
+</script>
+</body>
+</html>

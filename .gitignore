@@ -1,0 +1,7 @@
+keys.env
+.dev.vars
+*.zip
+__pycache__/
+.DS_Store
+node_modules/
+.wrangler/
